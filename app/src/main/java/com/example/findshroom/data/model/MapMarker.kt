@@ -10,8 +10,11 @@ data class MapMarker(
     val latitude: Double,
     val longitude: Double,
     val photoUri: String,
-    val mushroomId: Long? = null, // Reference to mushroom if recognized
+    val title: String? = null,
+    val mushroomId: Long? = null,
     val note: String? = null,
+    val userId: Long? = null,
+    val isPrivate: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()
 )
 

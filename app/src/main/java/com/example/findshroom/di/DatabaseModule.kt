@@ -22,7 +22,7 @@ object DatabaseModule {
             context,
             FindShroomDatabase::class.java,
             "findshroom_database"
-        ).build()
+        ).fallbackToDestructiveMigration().build()
     }
     
     @Provides
@@ -33,6 +33,26 @@ object DatabaseModule {
     @Provides
     fun provideMapMarkerDao(database: FindShroomDatabase): MapMarkerDao {
         return database.mapMarkerDao()
+    }
+    
+    @Provides
+    fun provideUserDao(database: FindShroomDatabase): com.example.findshroom.data.dao.UserDao {
+        return database.userDao()
+    }
+    
+    @Provides
+    fun provideSubscriptionDao(database: FindShroomDatabase): com.example.findshroom.data.dao.SubscriptionDao {
+        return database.subscriptionDao()
+    }
+    
+    @Provides
+    fun provideUserStatsDao(database: FindShroomDatabase): com.example.findshroom.data.dao.UserStatsDao {
+        return database.userStatsDao()
+    }
+    
+    @Provides
+    fun provideDiaryEntryDao(database: FindShroomDatabase): com.example.findshroom.data.dao.DiaryEntryDao {
+        return database.diaryEntryDao()
     }
 }
 

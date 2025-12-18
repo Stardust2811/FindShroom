@@ -85,6 +85,7 @@ dependencies {
     
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 
     // MapKit (Yandex)
     implementation("com.yandex.android:maps.mobile:4.3.1-lite")
@@ -102,6 +103,9 @@ dependencies {
     
     // Permissions
     implementation(libs.accompanist.permissions)
+    
+    // Location Services
+    implementation(libs.play.services.location)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
