@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -50,8 +51,19 @@ fun MapScreen(
 
     var showAddMarkerDialog by remember { mutableStateOf(false) }
     var selectedLocation by remember { mutableStateOf<Point?>(null) }
+    var markerTitle by remember { mutableStateOf("") }
     var markerNote by remember { mutableStateOf("") }
+    var markerIsPrivate by remember { mutableStateOf(false) }
     var selectedPhotoUri by remember { mutableStateOf<Uri?>(null) }
+    var hasMovedToUserLocation by remember { mutableStateOf(false) }
+    
+    // Check subscription status
+    val hasSubscription = remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        viewModel.checkSubscription { hasSub ->
+            hasSubscription.value = hasSub
+        }
+    }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -104,6 +116,21 @@ fun MapScreen(
             permissionsState.launchMultiplePermissionRequest()
         }
     }
+    
+    // Move to user location when available
+    LaunchedEffect(uiState.userLocation, hasMovedToUserLocation) {
+        uiState.userLocation?.let { location ->
+            if (!hasMovedToUserLocation) {
+                val userPoint = Point(location.latitude, location.longitude)
+                mapView.map.move(
+                    CameraPosition(userPoint, 15f, 0f, 0f),
+                    Animation(Animation.Type.SMOOTH, 1f),
+                    null
+                )
+                hasMovedToUserLocation = true
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
@@ -144,19 +171,29 @@ fun MapScreen(
             }
         )
 
-        // Floating action button – takes current camera center
-        FloatingActionButton(
-            onClick = {
-                mapViewState.value?.map?.cameraPosition?.target?.let { location ->
-                    selectedLocation = location
-                    showAddMarkerDialog = true
-                }
-            },
+        // Floating action buttons
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
-                .padding(16.dp)
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Icon(Icons.Default.Add, contentDescription = "Добавить метку")
+            FloatingActionButton(
+                onClick = { viewModel.getCurrentLocation() },
+                modifier = Modifier.size(56.dp)
+            ) {
+                Icon(Icons.Default.MyLocation, contentDescription = "Моё местоположение")
+            }
+            FloatingActionButton(
+                onClick = {
+                    mapViewState.value?.map?.cameraPosition?.target?.let { location ->
+                        selectedLocation = location
+                        showAddMarkerDialog = true
+                    }
+                }
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Добавить метку")
+            }
         }
 
         // Marker details dialog
@@ -179,30 +216,40 @@ fun MapScreen(
         if (showAddMarkerDialog) {
             AddMarkerDialog(
                 location = selectedLocation,
+                title = markerTitle,
                 note = markerNote,
                 photoUri = selectedPhotoUri,
+                onTitleChange = { markerTitle = it },
                 onNoteChange = { markerNote = it },
                 onPhotoSelect = { imagePickerLauncher.launch("image/*") },
                 onDismiss = {
                     showAddMarkerDialog = false
+                    markerTitle = ""
                     markerNote = ""
                     selectedPhotoUri = null
                     selectedLocation = null
                 },
-                onConfirm = { location, note, photoUri ->
+                onConfirm = { location, title, note, photoUri, isPrivate ->
                     if (location != null && photoUri != null) {
                         viewModel.addMarker(
                             latitude = location.latitude,
                             longitude = location.longitude,
                             photoUri = photoUri.toString(),
-                            note = note.ifEmpty { null }
+                            title = title.ifEmpty { null },
+                            note = note.ifEmpty { null },
+                            isPrivate = isPrivate
                         )
                         showAddMarkerDialog = false
+                        markerTitle = ""
                         markerNote = ""
+                        markerIsPrivate = false
                         selectedPhotoUri = null
                         selectedLocation = null
                     }
-                }
+                },
+                hasSubscription = hasSubscription.value,
+                isPrivate = markerIsPrivate,
+                onIsPrivateChange = { markerIsPrivate = it }
             )
         }
     }
@@ -212,12 +259,17 @@ fun MapScreen(
 @Composable
 fun AddMarkerDialog(
     location: Point?,
+    title: String,
     note: String,
     photoUri: Uri?,
+    hasSubscription: Boolean,
+    isPrivate: Boolean,
+    onTitleChange: (String) -> Unit,
     onNoteChange: (String) -> Unit,
     onPhotoSelect: () -> Unit,
+    onIsPrivateChange: (Boolean) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: (Point?, String, Uri?) -> Unit
+    onConfirm: (Point?, String, String, Uri?, Boolean) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -227,6 +279,14 @@ fun AddMarkerDialog(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text("Местоположение: ${location?.latitude}, ${location?.longitude}")
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = onTitleChange,
+                    label = { Text("Название (необязательно)") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
 
                 OutlinedTextField(
                     value = note,
@@ -241,11 +301,25 @@ fun AddMarkerDialog(
                 ) {
                     Text(if (photoUri != null) "Фото выбрано" else "Выбрать фото")
                 }
+                
+                if (hasSubscription) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = isPrivate,
+                            onCheckedChange = onIsPrivateChange
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Приватная метка (только для меня)")
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onConfirm(location, note, photoUri) },
+                onClick = { onConfirm(location, title, note, photoUri, isPrivate) },
                 enabled = location != null && photoUri != null
             ) {
                 Text("Добавить")
@@ -267,16 +341,25 @@ fun MarkerDetailsDialog(
     onDelete: () -> Unit,
     onUpdate: (MapMarker) -> Unit
 ) {
+    var title by remember { mutableStateOf(marker.title ?: "") }
     var note by remember { mutableStateOf(marker.note ?: "") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Детали метки") },
+        title = { Text(marker.title ?: "Детали метки") },
         text = {
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text("Координаты: ${marker.latitude}, ${marker.longitude}")
+
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("Название") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
 
                 OutlinedTextField(
                     value = note,
@@ -291,7 +374,7 @@ fun MarkerDetailsDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Button(
-                    onClick = { onUpdate(marker.copy(note = note.ifEmpty { null })) }
+                    onClick = { onUpdate(marker.copy(title = title.ifEmpty { null }, note = note.ifEmpty { null })) }
                 ) {
                     Text("Сохранить")
                 }
