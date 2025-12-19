@@ -1,6 +1,6 @@
 package com.example.findshroom.di
 
-import com.example.findshroom.data.repository.GeminiRepository
+import com.example.findshroom.data.repository.HuggingFaceRepository
 import com.example.findshroom.data.repository.MapMarkerRepository
 import com.example.findshroom.data.repository.MushroomRepository
 import dagger.Module
@@ -26,8 +26,8 @@ object RepositoryModule {
     
     @Provides
     @Singleton
-    fun provideGeminiRepository(): GeminiRepository {
-        return GeminiRepository()
+    fun provideHuggingFaceRepository(): HuggingFaceRepository {
+        return HuggingFaceRepository()
     }
 }
 

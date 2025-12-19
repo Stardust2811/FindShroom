@@ -32,10 +32,17 @@ class MapViewModel @Inject constructor(
     
     private fun loadMarkers() {
         viewModelScope.launch {
-            mapMarkerRepository.getAllMarkers()
-                .collect { markers ->
-                    _uiState.value = _uiState.value.copy(markers = markers)
-                }
+            try {
+                mapMarkerRepository.getAllMarkers()
+                    .collect { markers ->
+                        _uiState.value = _uiState.value.copy(markers = markers)
+                    }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Ошибка загрузки меток: ${e.message}",
+                    markers = emptyList()
+                )
+            }
         }
     }
     

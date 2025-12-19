@@ -22,7 +22,9 @@ object DatabaseModule {
             context,
             FindShroomDatabase::class.java,
             "findshroom_database"
-        ).build()
+        )
+            .fallbackToDestructiveMigration() // Удаляет старую базу при несовместимости версий
+            .build()
     }
     
     @Provides

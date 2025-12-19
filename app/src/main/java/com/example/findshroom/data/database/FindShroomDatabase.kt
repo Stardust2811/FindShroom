@@ -9,7 +9,7 @@ import com.example.findshroom.data.model.Mushroom
 
 @Database(
     entities = [Mushroom::class, MapMarker::class],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 abstract class FindShroomDatabase : RoomDatabase() {

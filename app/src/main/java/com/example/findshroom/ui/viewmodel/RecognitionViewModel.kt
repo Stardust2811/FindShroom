@@ -1,10 +1,11 @@
 package com.example.findshroom.ui.viewmodel
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.findshroom.data.model.Mushroom
-import com.example.findshroom.data.repository.GeminiRepository
+import com.example.findshroom.data.repository.HuggingFaceRepository
 import com.example.findshroom.data.repository.MushroomRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,24 +24,23 @@ data class RecognitionUiState(
 
 @HiltViewModel
 class RecognitionViewModel @Inject constructor(
-    private val geminiRepository: GeminiRepository,
+    private val huggingFaceRepository: HuggingFaceRepository,
     private val mushroomRepository: MushroomRepository
 ) : ViewModel() {
-    
+
     private val _uiState = MutableStateFlow(RecognitionUiState())
     val uiState: StateFlow<RecognitionUiState> = _uiState.asStateFlow()
-    
+
     fun recognizeMushroom(bitmap: Bitmap) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            
-            geminiRepository.recognizeMushroom(bitmap)
+
+            huggingFaceRepository.recognizeMushroom(bitmap)
                 .onSuccess { response ->
+                    Log.d("HF_DEBUG", "response = $response")
                     try {
-                        // Try to parse JSON response
-                        val jsonString = extractJsonFromResponse(response)
-                        val json = JSONObject(jsonString)
-                        
+                        val json = JSONObject(response)
+
                         val mushroom = Mushroom(
                             name = json.optString("name", "Неизвестный гриб"),
                             scientificName = json.optString("scientificName", ""),
@@ -50,14 +50,14 @@ class RecognitionViewModel @Inject constructor(
                             season = json.optString("season"),
                             characteristics = json.optString("characteristics")
                         )
-                        
+
                         _uiState.value = _uiState.value.copy(
                             isLoading = false,
                             recognizedMushroom = mushroom,
                             rawResponse = response
                         )
                     } catch (e: Exception) {
-                        // If JSON parsing fails, create a mushroom from raw response
+                        Log.e("HF_DEBUG", "JSON parse error", e)
                         val mushroom = Mushroom(
                             name = "Распознано",
                             scientificName = "",
@@ -72,6 +72,7 @@ class RecognitionViewModel @Inject constructor(
                     }
                 }
                 .onFailure { error ->
+                    Log.e("HF_DEBUG", "recognize error", error)
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         error = error.message ?: "Ошибка распознавания"
@@ -79,7 +80,7 @@ class RecognitionViewModel @Inject constructor(
                 }
         }
     }
-    
+
     fun saveMushroom(mushroom: Mushroom, imageUri: String?) {
         viewModelScope.launch {
             try {
@@ -93,20 +94,8 @@ class RecognitionViewModel @Inject constructor(
             }
         }
     }
-    
+
     fun clearState() {
         _uiState.value = RecognitionUiState()
     }
-    
-    private fun extractJsonFromResponse(response: String): String {
-        // Try to extract JSON from markdown code blocks or plain text
-        val jsonStart = response.indexOf('{')
-        val jsonEnd = response.lastIndexOf('}')
-        return if (jsonStart >= 0 && jsonEnd > jsonStart) {
-            response.substring(jsonStart, jsonEnd + 1)
-        } else {
-            response
-        }
-    }
 }
-

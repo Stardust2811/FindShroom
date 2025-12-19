@@ -35,13 +35,21 @@ class GuideViewModel @Inject constructor(
     
     private fun loadMushrooms() {
         viewModelScope.launch {
-            mushroomRepository.getAllMushrooms()
-                .collect { mushrooms ->
-                    _uiState.value = _uiState.value.copy(
-                        mushrooms = mushrooms,
-                        filteredMushrooms = filterMushrooms(mushrooms, _uiState.value.searchQuery)
-                    )
-                }
+            try {
+                mushroomRepository.getAllMushrooms()
+                    .collect { mushrooms ->
+                        _uiState.value = _uiState.value.copy(
+                            mushrooms = mushrooms,
+                            filteredMushrooms = filterMushrooms(mushrooms, _uiState.value.searchQuery)
+                        )
+                    }
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = "Ошибка загрузки грибов: ${e.message}",
+                    mushrooms = emptyList(),
+                    filteredMushrooms = emptyList()
+                )
+            }
         }
     }
     

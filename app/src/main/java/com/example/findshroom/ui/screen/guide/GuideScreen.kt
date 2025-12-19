@@ -27,6 +27,8 @@ fun GuideScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
+    val error = uiState.error
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -43,7 +45,28 @@ fun GuideScreen(
         
         Spacer(modifier = Modifier.height(16.dp))
 
-        if (uiState.filteredMushrooms.isEmpty()) {
+        if (error != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 32.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Button(onClick = { viewModel.clearError() }) {
+                        Text("Повторить")
+                    }
+                }
+            }
+        } else if (uiState.filteredMushrooms.isEmpty() && !uiState.isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()

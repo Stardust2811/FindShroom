@@ -65,39 +65,61 @@ fun MapScreen(
 
     // Single MapView instance tied to composable lifecycle
     val mapView = remember {
-        MapView(context).apply {
-            map.move(
-                CameraPosition(defaultLocation, 10f, 0f, 0f),
-                Animation(Animation.Type.SMOOTH, 0f),
-                null
-            )
-        }
-    }
-
-    // Handle MapView lifecycle
-    DisposableEffect(lifecycle, mapView) {
-        val observer = object : DefaultLifecycleObserver {
-            override fun onStart(owner: LifecycleOwner) {
-                // MapKit global lifecycle + MapView lifecycle
-                MapKitFactory.getInstance().onStart()
-                mapView.onStart()
+        try {
+            MapView(context).apply {
+                map.move(
+                    CameraPosition(defaultLocation, 10f, 0f, 0f),
+                    Animation(Animation.Type.SMOOTH, 0f),
+                    null
+                )
             }
-
-            override fun onStop(owner: LifecycleOwner) {
-                mapView.onStop()
-                MapKitFactory.getInstance().onStop()
-            }
-        }
-        lifecycle.addObserver(observer)
-
-        onDispose {
-            lifecycle.removeObserver(observer)
-            mapView.onStop()
+        } catch (e: Exception) {
+            null
         }
     }
 
     // Remember reference so we can read camera position from FAB
     val mapViewState = remember { mutableStateOf<MapView?>(null) }
+    var inputListener by remember { mutableStateOf<InputListener?>(null) }
+
+    // Handle MapView lifecycle
+    DisposableEffect(lifecycle, mapView) {
+        if (mapView == null) {
+            onDispose { }
+        } else {
+            val observer = object : DefaultLifecycleObserver {
+                override fun onStart(owner: LifecycleOwner) {
+                    try {
+                        // MapKit global lifecycle + MapView lifecycle
+                        MapKitFactory.getInstance().onStart()
+                        mapView.onStart()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                override fun onStop(owner: LifecycleOwner) {
+                    try {
+                        mapView.onStop()
+                        MapKitFactory.getInstance().onStop()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+            }
+            lifecycle.addObserver(observer)
+
+            onDispose {
+                try {
+                    lifecycle.removeObserver(observer)
+                    inputListener?.let { mapView.map.removeInputListener(it) }
+                    mapView.onStop()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (!permissionsState.allPermissionsGranted) {
@@ -105,7 +127,15 @@ fun MapScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    if (mapView == null) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Ошибка инициализации карты")
+        }
+    } else {
+        Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = {
@@ -113,7 +143,7 @@ fun MapScreen(
                     mapViewState.value = this
 
                     // Long tap to choose location
-                    map.addInputListener(object : InputListener {
+                    val listener = object : InputListener {
                         override fun onMapTap(map: Map, point: Point) {
                             // ignore single tap
                         }
@@ -122,27 +152,64 @@ fun MapScreen(
                             selectedLocation = point
                             showAddMarkerDialog = true
                         }
-                    })
+                    }
+                    inputListener = listener
+                    map.addInputListener(listener)
                 }
             },
             update = { view ->
                 mapViewState.value = view
 
-                val mapObjects = view.map.mapObjects
-                mapObjects.clear()
+                try {
+                    val mapObjects = view.map.mapObjects
+                    mapObjects.clear()
 
-                uiState.markers.forEach { marker ->
-                    val point = Point(marker.latitude, marker.longitude)
-                    val placemark = mapObjects.addPlacemark(point)
-                    placemark.userData = marker
+                    uiState.markers.forEach { marker ->
+                        try {
+                            val point = Point(marker.latitude, marker.longitude)
+                            val placemark = mapObjects.addPlacemark(point)
+                            placemark.userData = marker
 
-                    placemark.addTapListener(MapObjectTapListener { _, _ ->
-                        viewModel.selectMarker(marker)
-                        true
-                    })
+                            placemark.addTapListener(MapObjectTapListener { _, _ ->
+                                viewModel.selectMarker(marker)
+                                true
+                            })
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
                 }
             }
         )
+
+        // Error message
+        uiState.error?.let { error ->
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                    TextButton(onClick = { viewModel.clearError() }) {
+                        Text("Закрыть")
+                    }
+                }
+            }
+        }
 
         // Floating action button – takes current camera center
         FloatingActionButton(
@@ -204,6 +271,7 @@ fun MapScreen(
                     }
                 }
             )
+        }
         }
     }
 }

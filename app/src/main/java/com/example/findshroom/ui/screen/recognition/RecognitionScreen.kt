@@ -37,25 +37,22 @@ fun RecognitionScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
-    
-    // Для камеры достаточно только разрешения CAMERA.
-    // READ_EXTERNAL_STORAGE здесь не нужен (галерея использует системный picker).
+
     val permissionsState = rememberMultiplePermissionsState(
         permissions = listOf(
             Manifest.permission.CAMERA
         )
     )
-    
+
     var capturedImageUri by remember { mutableStateOf<Uri?>(null) }
     var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var photoFile by remember { mutableStateOf<File?>(null) }
-    
+
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         uri?.let {
             capturedImageUri = it
-            // Load bitmap from URI
             context.contentResolver.openInputStream(it)?.use { inputStream ->
                 BitmapFactory.decodeStream(inputStream)?.let { bitmap ->
                     capturedBitmap = bitmap
@@ -64,7 +61,7 @@ fun RecognitionScreen(
             }
         }
     }
-    
+
     val cameraLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.TakePicture()
     ) { success ->
@@ -83,7 +80,7 @@ fun RecognitionScreen(
             }
         }
     }
-    
+
     fun takePhoto() {
         val file = File(context.cacheDir, "temp_photo_${System.currentTimeMillis()}.jpg")
         photoFile = file
@@ -94,7 +91,7 @@ fun RecognitionScreen(
         )
         cameraLauncher.launch(uri)
     }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -107,8 +104,7 @@ fun RecognitionScreen(
             text = "FindShroom",
             style = MaterialTheme.typography.headlineMedium
         )
-        
-        // Image display
+
         if (capturedBitmap != null) {
             Image(
                 bitmap = capturedBitmap!!.asImageBitmap(),
@@ -132,8 +128,7 @@ fun RecognitionScreen(
                 contentScale = ContentScale.Fit
             )
         }
-        
-        // Action buttons
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -152,7 +147,7 @@ fun RecognitionScreen(
                 Spacer(Modifier.width(8.dp))
                 Text("Камера")
             }
-            
+
             Button(
                 onClick = { imagePickerLauncher.launch("image/*") },
                 modifier = Modifier.weight(1f)
@@ -162,14 +157,12 @@ fun RecognitionScreen(
                 Text("Галерея")
             }
         }
-        
-        // Loading indicator
+
         if (uiState.isLoading) {
             CircularProgressIndicator()
             Text("Распознавание...")
         }
-        
-        // Error message
+
         uiState.error?.let { error ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -184,8 +177,7 @@ fun RecognitionScreen(
                 )
             }
         }
-        
-        // Recognition result
+
         uiState.recognizedMushroom?.let { mushroom ->
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -237,7 +229,7 @@ fun RecognitionScreen(
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
-                    
+
                     Button(
                         onClick = {
                             viewModel.saveMushroom(mushroom, capturedImageUri?.toString())
@@ -251,4 +243,3 @@ fun RecognitionScreen(
         }
     }
 }
-

@@ -92,8 +92,9 @@ dependencies {
     // Coil
     implementation(libs.coil.compose)
     
-    // Gemini AI
-    implementation(libs.google.generative.ai)
+    // OkHttp for Hugging Face API
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.google.code.gson:gson:2.10.1")
     
     // CameraX
     implementation(libs.camerax.camera2)
