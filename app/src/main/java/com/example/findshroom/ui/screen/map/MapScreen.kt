@@ -5,13 +5,15 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
@@ -19,6 +21,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import coil.compose.AsyncImage
 import com.example.findshroom.data.model.MapMarker
 import com.example.findshroom.ui.viewmodel.MapViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -31,6 +34,7 @@ import com.yandex.mapkit.map.InputListener
 import com.yandex.mapkit.map.Map
 import com.yandex.mapkit.map.MapObjectTapListener
 import com.yandex.mapkit.mapview.MapView
+import com.yandex.mapkit.user_location.UserLocationLayer
 
 @OptIn(ExperimentalPermissionsApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -78,8 +82,9 @@ fun MapScreen(
         }
     }
 
-    // Remember reference so we can read camera position from FAB
+    // Remember references so we can read camera position and access user location layer
     val mapViewState = remember { mutableStateOf<MapView?>(null) }
+    val userLocationLayerState = remember { mutableStateOf<UserLocationLayer?>(null) }
     var inputListener by remember { mutableStateOf<InputListener?>(null) }
 
     // Handle MapView lifecycle
@@ -135,95 +140,177 @@ fun MapScreen(
             Text("Ошибка инициализации карты")
         }
     } else {
-        Box(modifier = Modifier.fillMaxSize()) {
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = {
-                mapView.apply {
-                    mapViewState.value = this
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Text(
+                text = "FindShroom",
+                style = MaterialTheme.typography.headlineSmall
+            )
 
-                    // Long tap to choose location
-                    val listener = object : InputListener {
-                        override fun onMapTap(map: Map, point: Point) {
-                            // ignore single tap
-                        }
-
-                        override fun onMapLongTap(map: Map, point: Point) {
-                            selectedLocation = point
-                            showAddMarkerDialog = true
-                        }
-                    }
-                    inputListener = listener
-                    map.addInputListener(listener)
-                }
-            },
-            update = { view ->
-                mapViewState.value = view
-
-                try {
-                    val mapObjects = view.map.mapObjects
-                    mapObjects.clear()
-
-                    uiState.markers.forEach { marker ->
-                        try {
-                            val point = Point(marker.latitude, marker.longitude)
-                            val placemark = mapObjects.addPlacemark(point)
-                            placemark.userData = marker
-
-                            placemark.addTapListener(MapObjectTapListener { _, _ ->
-                                viewModel.selectMarker(marker)
-                                true
-                            })
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        )
-
-        // Error message
-        uiState.error?.let { error ->
             Card(
                 modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(16.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
+                    .fillMaxWidth()
+                    .weight(1f),
+                shape = RoundedCornerShape(24.dp)
             ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = error,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AndroidView(
+                        modifier = Modifier.fillMaxSize(),
+                        factory = {
+                            mapView.apply {
+                                mapViewState.value = this
+
+                                // Enable user location layer once when MapView is created
+                                try {
+                                    if (userLocationLayerState.value == null) {
+                                        val layer = MapKitFactory.getInstance()
+                                            .createUserLocationLayer(this.mapWindow)
+                                        layer.isVisible = true
+                                        layer.isHeadingEnabled = true
+                                        userLocationLayerState.value = layer
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+
+                                // Long tap to choose location
+                                val listener = object : InputListener {
+                                    override fun onMapTap(map: Map, point: Point) {
+                                        // ignore single tap
+                                    }
+
+                                    override fun onMapLongTap(map: Map, point: Point) {
+                                        selectedLocation = point
+                                        showAddMarkerDialog = true
+                                    }
+                                }
+                                inputListener = listener
+                                map.addInputListener(listener)
+                            }
+                        },
+                        update = { view ->
+                            mapViewState.value = view
+
+                            // Ensure user location layer exists after recomposition
+                            if (userLocationLayerState.value == null) {
+                                try {
+                                    val layer = MapKitFactory.getInstance()
+                                        .createUserLocationLayer(view.mapWindow)
+                                    layer.isVisible = true
+                                    layer.isHeadingEnabled = true
+                                    userLocationLayerState.value = layer
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                }
+                            }
+
+                            try {
+                                val mapObjects = view.map.mapObjects
+                                mapObjects.clear()
+
+                                uiState.markers.forEach { marker ->
+                                    try {
+                                        val point = Point(marker.latitude, marker.longitude)
+                                        val placemark = mapObjects.addPlacemark(point)
+                                        placemark.userData = marker
+
+                                        placemark.addTapListener(MapObjectTapListener { _, _ ->
+                                            viewModel.selectMarker(marker)
+                                            true
+                                        })
+                                    } catch (e: Exception) {
+                                        e.printStackTrace()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
                     )
-                    TextButton(onClick = { viewModel.clearError() }) {
-                        Text("Закрыть")
+
+                    // Error message over the map
+                    uiState.error?.let { error ->
+                        Card(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            )
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = error,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                TextButton(onClick = { viewModel.clearError() }) {
+                                    Text("Закрыть")
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        // Floating action button – takes current camera center
-        FloatingActionButton(
-            onClick = {
-                mapViewState.value?.map?.cameraPosition?.target?.let { location ->
-                    selectedLocation = location
-                    showAddMarkerDialog = true
+            // Bottom controls: small buttons for geolocation and adding markers
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FilledTonalButton(
+                    onClick = {
+                        val map = mapViewState.value?.map
+                        val userCamera = userLocationLayerState.value?.cameraPosition()
+                        if (map != null && userCamera != null) {
+                            map.move(
+                                CameraPosition(
+                                    userCamera.target,
+                                    16f,
+                                    0f,
+                                    0f
+                                ),
+                                Animation(Animation.Type.SMOOTH, 0.5f),
+                                null
+                            )
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MyLocation,
+                        contentDescription = "Перейти к моей геопозиции"
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Геопозиция")
                 }
-            },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-        ) {
-            Icon(Icons.Default.Add, contentDescription = "Добавить метку")
+
+                FilledTonalButton(
+                    onClick = {
+                        mapViewState.value?.map?.cameraPosition?.target?.let { location ->
+                            selectedLocation = location
+                            showAddMarkerDialog = true
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Добавить метку"
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Оставить метку")
+                }
+            }
         }
 
         // Marker details dialog
@@ -271,7 +358,6 @@ fun MapScreen(
                     }
                 }
             )
-        }
         }
     }
 }
@@ -344,6 +430,15 @@ fun MarkerDetailsDialog(
             Column(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                AsyncImage(
+                    model = marker.photoUri,
+                    contentDescription = "Фото метки",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentScale = ContentScale.Crop
+                )
+
                 Text("Координаты: ${marker.latitude}, ${marker.longitude}")
 
                 OutlinedTextField(

@@ -21,14 +21,18 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Yandex MapKit API key. Put MAPKIT_API_KEY=... into your local.properties (not committed to VCS).
+        // Yandex MapKit API key.
+        // По умолчанию используем общий ключ для всех сборок,
+        // а при наличии local.properties с MAPKIT_API_KEY переопределяем его.
         val localPropertiesFile = rootProject.file("local.properties")
+        val defaultMapkitKey = "b2a12631-f70c-409d-b0f7-e5c70184c4ad"
         val mapkitApiKey = if (localPropertiesFile.exists()) {
             val properties = Properties()
             localPropertiesFile.inputStream().use { properties.load(it) }
-            properties.getProperty("MAPKIT_API_KEY")?.trim() ?: "YOUR_API_KEY_HERE"
+            properties.getProperty("MAPKIT_API_KEY")?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: defaultMapkitKey
         } else {
-            "YOUR_API_KEY_HERE"
+            defaultMapkitKey
         }
         buildConfigField("String", "MAPKIT_API_KEY", "\"$mapkitApiKey\"")
     }
